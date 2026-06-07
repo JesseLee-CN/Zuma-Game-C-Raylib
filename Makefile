@@ -9,7 +9,7 @@ RAYLIB_PATH ?= C:/raylib
 CXX        ?= g++
 CXXFLAGS   := -g -Wall -Wextra -std=c++17
 INCLUDES   := -Iinclude -I$(RAYLIB_PATH)/include
-LDFLAGS    := -L$(RAYLIB_PATH)/lib -lraylib -lopengl32 -lgdi32 -lwinmm
+LDFLAGS    := -L$(RAYLIB_PATH)/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
 SRCDIR     := src
 OBJDIR     := build
 TARGET     := $(OBJDIR)/ZumaGame.exe

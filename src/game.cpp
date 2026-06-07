@@ -345,13 +345,17 @@ void InputMenu(GameContext* g)
 				break;
 			}
 		}
-	}
-	if (IsInputRightPressed()) {
-		RenderClose();
-		exit(0);
+		// ── EXIT 按钮 ──
+		int exitBtnW = btnW;
+		int exitBtnH = btnH;
+		int exitBtnY = startY + 5 * gap + btnH / 2;
+		int exitBtnX = g->centerX - exitBtnW / 2;
+		if (PointInRect(mx, my, exitBtnX, exitBtnY, exitBtnW, exitBtnH)) {
+			RenderClose();
+			exit(0);
+		}
 	}
 }
-
 void InputCustomize(GameContext* g)
 {
 	Vector2 mp = GetInputMousePos();
@@ -413,10 +417,6 @@ void InputCustomize(GameContext* g)
 			g->state = MENU;
 		}
 	}
-	if (IsInputRightPressed()) {
-		RenderClose();
-		exit(0);
-	}
 }
 
 void InputPlaying(GameContext* g)
@@ -424,6 +424,17 @@ void InputPlaying(GameContext* g)
 	Vector2 mp = GetInputMousePos();
 	int mx = (int)mp.x, my = (int)mp.y;
 	g->aimx = mx; g->aimy = my;
+
+	// ── EXIT 按钮 ──
+	int exitW = BALLRADIUS * 6;
+	if (exitW < 60) exitW = 60;
+	int exitH = BALLRADIUS * 5 / 2;
+	if (exitH < 24) exitH = 24;
+	int exitX = 10, exitY = 10;
+	if (IsInputLeftReleased() && PointInRect(mx, my, exitX, exitY, exitW, exitH)) {
+		finishGame(g, false);
+		return;
+	}
 
 	if (!g->ballMoving) {
 		if (IsInputLeftDown())
@@ -441,13 +452,6 @@ void InputPlaying(GameContext* g)
 			g->ballMoving = true;
 			g->aiming = false;
 		}
-	}
-
-	if (IsInputRightPressed()) {
-		if (g->head != NULL) DestroyList(g->head);
-		g->head = NULL;
-		RenderClose();
-		exit(0);
 	}
 }
 
@@ -478,12 +482,6 @@ void InputSettlement(GameContext* g)
 			RenderClose();
 			exit(0);
 		}
-	}
-	if (IsInputRightPressed()) {
-		DestroyList(g->head);
-		g->head = NULL;
-		RenderClose();
-		exit(0);
 	}
 }
 
@@ -602,6 +600,13 @@ void RenderMenu(const GameContext* g)
 		            (float)(btnY + btnH * 62 / 100),
 		            descFontH, descColor);
 	}
+
+	// ── EXIT 按钮 ──
+	int exitBtnY = startY + 5 * gap + btnH / 2;
+	int exitBtnX = g->centerX - btnW / 2;
+	bool hoverExit = PointInRect(g->aimx, g->aimy, exitBtnX, exitBtnY, btnW, btnH);
+	int exitFontH = btnH * 55 / 100;
+	drawButton(exitBtnX, exitBtnY, btnW, btnH, "EXIT", exitFontH, hoverExit);
 }
 
 void RenderCustomize(const GameContext* g)
@@ -961,4 +966,13 @@ void RenderPlayingHUD(GameContext* g)
 	int ssw = MeasureTextStr(shotStr, shotFontH);
 	DrawTextStr(shotStr, (float)(g->winWidth - ssw - 10),
 	            10.0f + scoreFontH + 2, shotFontH, shotColor);
+	// ── EXIT 按钮 ──
+	int exitW = BALLRADIUS * 6;
+	if (exitW < 60) exitW = 60;
+	int exitH = BALLRADIUS * 5 / 2;
+	if (exitH < 24) exitH = 24;
+	int exitX = 10, exitY = 10;
+	int exitFontH = exitH * 55 / 100;
+	bool hoverExit = PointInRect(g->aimx, g->aimy, exitX, exitY, exitW, exitH);
+	drawButton(exitX, exitY, exitW, exitH, "EXIT", exitFontH, hoverExit);
 }

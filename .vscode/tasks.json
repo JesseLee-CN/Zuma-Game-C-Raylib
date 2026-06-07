@@ -1,0 +1,38 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "C/C++: g++ build Zuma Game (Raylib)",
+            "command": "g++",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g",
+                "-Wall",
+                "-Wextra",
+                "-std=c++17",
+                "${workspaceFolder}\\src\\*.cpp",
+                "-I${workspaceFolder}\\include",
+                "-I${env:RAYLIB_PATH}\\include",
+                "-L${env:RAYLIB_PATH}\\lib",
+                "-o",
+                "${workspaceFolder}\\build\\ZumaGame.exe",
+                "-lraylib",
+                "-lopengl32",
+                "-lgdi32",
+                "-lwinmm"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "Build Zuma Game with Raylib GPU Backend"
+        }
+    ],
+    "version": "2.0.0"
+}

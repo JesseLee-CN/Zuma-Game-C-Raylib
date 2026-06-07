@@ -35,6 +35,9 @@ void GameInit(GameContext* g)
 	g->customBalls        = 20;
 	g->customShots        = 80;
 	g->customShotsInfinite = false;
+	g->customHoldBtn      = -1;
+	g->customHoldTime     = 0.0f;
+	g->customBatchCount   = 0;
 
 	g->head     = NULL;
 	g->cball    = {0, 0, 0.0f, 0.0f, (BallColor)0};
@@ -363,60 +366,115 @@ void InputCustomize(GameContext* g)
 	int mx = (int)mp.x, my = (int)mp.y;
 	g->aimx = mx; g->aimy = my;
 
-	if (IsInputLeftReleased()) {
-		int ctrlBtnS = g->winHeight / 20;
-		if (ctrlBtnS < 22) ctrlBtnS = 22;
-		if (ctrlBtnS > 36) ctrlBtnS = 36;
-		int ctrlFontH = ctrlBtnS * 3 / 4;
-		int rowH = ctrlBtnS + 8;
-		int row1Y = g->winHeight * 35 / 100;
-		int row2Y = row1Y + rowH + 12;
+	// ── Compute button layout ──────────────────────────
+	int ctrlBtnS = g->winHeight / 20;
+	if (ctrlBtnS < 22) ctrlBtnS = 22;
+	if (ctrlBtnS > 36) ctrlBtnS = 36;
+	int ctrlFontH = ctrlBtnS * 3 / 4;
+	int rowH = ctrlBtnS + 8;
+	int row1Y = g->winHeight * 35 / 100;
+	int row2Y = row1Y + rowH + 12;
 
-		int labelW = MeasureTextStr("Shots:  ", ctrlFontH) + 10;
-		int valW = MeasureTextStr("200", ctrlFontH) + 30;
+	int labelW = MeasureTextStr("Shots:  ", ctrlFontH) + 10;
+	int valW = MeasureTextStr("200", ctrlFontH) + 30;
 
-		int ballsMinusX = g->centerX - labelW/2;
-		int ballsPlusX  = ballsMinusX + ctrlBtnS + 4 + valW + 4;
-		int shotsMinusX = g->centerX - labelW/2;
-		int shotsPlusX  = shotsMinusX + ctrlBtnS + 4 + valW + 4;
-		int shotsInfX   = shotsPlusX + ctrlBtnS + 8;
+	int ballsMinusX = g->centerX - labelW/2;
+	int ballsPlusX  = ballsMinusX + ctrlBtnS + 4 + valW + 4;
+	int shotsMinusX = g->centerX - labelW/2;
+	int shotsPlusX  = shotsMinusX + ctrlBtnS + 4 + valW + 4;
+	int shotsInfX   = shotsPlusX + ctrlBtnS + 8;
 
-		int startBtnW = g->winWidth * 30 / 100;
-		if (startBtnW < 120) startBtnW = 120;
-		int startBtnH = g->winHeight * 8 / 100;
-		if (startBtnH < 32) startBtnH = 32;
-		int startBtnX = g->centerX - startBtnW / 2;
-		int startBtnY = g->winHeight * 65 / 100;
-		int backBtnY  = startBtnY + startBtnH + 8;
+	int startBtnW = g->winWidth * 30 / 100;
+	if (startBtnW < 120) startBtnW = 120;
+	int startBtnH = g->winHeight * 8 / 100;
+	if (startBtnH < 32) startBtnH = 32;
+	int startBtnX = g->centerX - startBtnW / 2;
+	int startBtnY = g->winHeight * 65 / 100;
+	int backBtnY  = startBtnY + startBtnH + 8;
 
-		if (PointInRect(mx, my, ballsMinusX, row1Y, ctrlBtnS, ctrlBtnS)) {
-			if (g->customBalls > 5) g->customBalls--;
+	// ── Determine hovered +/- button ───────────────────
+	// 0=balls-, 1=balls+, 2=shots-, 3=shots+
+	int hoveredBtn = -1;
+	if (PointInRect(mx, my, ballsMinusX, row1Y, ctrlBtnS, ctrlBtnS))
+		hoveredBtn = 0;
+	else if (PointInRect(mx, my, ballsPlusX, row1Y, ctrlBtnS, ctrlBtnS))
+		hoveredBtn = 1;
+	else if (!g->customShotsInfinite &&
+	         PointInRect(mx, my, shotsMinusX, row2Y, ctrlBtnS, ctrlBtnS))
+		hoveredBtn = 2;
+	else if (!g->customShotsInfinite &&
+	         PointInRect(mx, my, shotsPlusX, row2Y, ctrlBtnS, ctrlBtnS))
+		hoveredBtn = 3;
+
+	float dt = GetFrameTime();
+	bool leftDown = IsInputLeftDown();
+	bool leftReleased = IsInputLeftReleased();
+
+	// ── Hold tracking ──────────────────────────────────
+	if (leftDown && hoveredBtn >= 0) {
+		if (g->customHoldBtn == hoveredBtn) {
+			g->customHoldTime += dt;
+		} else if (g->customHoldBtn == -1) {
+			g->customHoldBtn = hoveredBtn;
+			g->customHoldTime = 0.0f;
+			g->customBatchCount = 0;
 		}
-		else if (PointInRect(mx, my, ballsPlusX, row1Y, ctrlBtnS, ctrlBtnS)) {
-			if (g->customBalls < 50) g->customBalls++;
+	} else if (!leftDown && !leftReleased) {
+		g->customHoldBtn = -1;
+		g->customHoldTime = 0.0f;
+		g->customBatchCount = 0;
+	}
+
+	// ── Batch mode: hold >1s, fire every 0.3s (+/-10) ─
+	if (g->customHoldBtn >= 0 && g->customHoldTime >= 0.6f) {
+		int batchIdx = (int)((g->customHoldTime - 0.6f) / 0.3f);
+		if (batchIdx > g->customBatchCount) {
+			int repeat = batchIdx - g->customBatchCount;
+			int delta = repeat * 10;
+			switch (g->customHoldBtn) {
+			case 0: g->customBalls = (g->customBalls - delta >= 5)
+			        ? g->customBalls - delta : 5; break;
+			case 1: g->customBalls = (g->customBalls + delta <= 50)
+			        ? g->customBalls + delta : 50; break;
+			case 2: g->customShots = (g->customShots - delta >= 10)
+			        ? g->customShots - delta : 10; break;
+			case 3: g->customShots = (g->customShots + delta <= 200)
+			        ? g->customShots + delta : 200; break;
+			}
+			g->customBatchCount = batchIdx;
 		}
-		else if (!g->customShotsInfinite &&
-		         PointInRect(mx, my, shotsMinusX, row2Y, ctrlBtnS, ctrlBtnS)) {
-			if (g->customShots > 10) g->customShots--;
+	}
+
+	// ── Release / single-click ─────────────────────────
+	if (leftReleased) {
+		if (g->customHoldBtn >= 0 && g->customHoldTime < 0.6f) {
+			// Single click on +/- button
+			switch (g->customHoldBtn) {
+			case 0: if (g->customBalls > 5) g->customBalls--; break;
+			case 1: if (g->customBalls < 50) g->customBalls++; break;
+			case 2: if (g->customShots > 10) g->customShots--; break;
+			case 3: if (g->customShots < 200) g->customShots++; break;
+			}
+		} else if (g->customHoldBtn == -1) {
+			// Click on non-hold buttons
+			if (PointInRect(mx, my, shotsInfX, row2Y,
+			                ctrlBtnS + 6, ctrlBtnS)) {
+				g->customShotsInfinite = !g->customShotsInfinite;
+			}
+			else if (PointInRect(mx, my, startBtnX, startBtnY,
+			                     startBtnW, startBtnH)) {
+				g->startBalls = g->customBalls;
+				g->startShots = g->customShotsInfinite ? -1 : g->customShots;
+				startGame(g);
+			}
+			else if (PointInRect(mx, my, startBtnX, backBtnY,
+			                     startBtnW, startBtnH)) {
+				g->state = MENU;
+			}
 		}
-		else if (!g->customShotsInfinite &&
-		         PointInRect(mx, my, shotsPlusX, row2Y, ctrlBtnS, ctrlBtnS)) {
-			if (g->customShots < 200) g->customShots++;
-		}
-		else if (PointInRect(mx, my, shotsInfX, row2Y,
-		                     ctrlBtnS + 6, ctrlBtnS)) {
-			g->customShotsInfinite = !g->customShotsInfinite;
-		}
-		else if (PointInRect(mx, my, startBtnX, startBtnY,
-		                     startBtnW, startBtnH)) {
-			g->startBalls = g->customBalls;
-			g->startShots = g->customShotsInfinite ? -1 : g->customShots;
-			startGame(g);
-		}
-		else if (PointInRect(mx, my, startBtnX, backBtnY,
-		                     startBtnW, startBtnH)) {
-			g->state = MENU;
-		}
+		g->customHoldBtn = -1;
+		g->customHoldTime = 0.0f;
+		g->customBatchCount = 0;
 	}
 }
 

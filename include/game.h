@@ -38,6 +38,9 @@ struct GameContext {
 	int customBalls;
 	int customShots;
 	bool customShotsInfinite;
+	int customHoldBtn;
+	float customHoldTime;
+	int customBatchCount;
 
 	// Playing state
 	Node* head;

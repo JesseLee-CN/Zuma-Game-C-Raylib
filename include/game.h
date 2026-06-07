@@ -26,6 +26,9 @@ struct GameContext {
 	GameState state;
 	bool gameWon;
 	float clearTimer;
+	int clearPhase;
+	float clearBallProgress;
+	float clearActiveTheta;
 
 	// Difficulty config
 	int startBalls;
@@ -75,8 +78,9 @@ void InputCustomize(GameContext* g);
 void InputPlaying(GameContext* g);
 void InputSettlement(GameContext* g);
 
-// ── Game update (PLAYING only) ────────────────────────
+// ── Game update ────────────────────────────────────────
 void UpdatePlaying(GameContext* g);
+void UpdateClearing(GameContext* g);
 
 // ── State render handlers ─────────────────────────────
 void RenderMenu(const GameContext* g);

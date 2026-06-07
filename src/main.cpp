@@ -26,6 +26,8 @@ int main()
 		// ── Update ─────────────────────────────────
 		if (g.state == PLAYING)
 			UpdatePlaying(&g);
+		if (g.state == CLEARING)
+			UpdateClearing(&g);
 
 		// ── Render ─────────────────────────────────
 		BeginRender(BLACK);

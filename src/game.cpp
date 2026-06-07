@@ -25,6 +25,9 @@ void GameInit(GameContext* g)
 	g->state     = MENU;
 	g->gameWon   = false;
 	g->clearTimer = 0.0f;
+	g->clearPhase   = 0;
+	g->clearBallProgress = 0.0f;
+	g->clearActiveTheta  = 0.0f;
 
 	g->startBalls = 10;
 	g->startShots = -1;
@@ -34,7 +37,7 @@ void GameInit(GameContext* g)
 	g->customShotsInfinite = false;
 
 	g->head     = NULL;
-	g->cball    = {0, 0, (BallColor)0};
+	g->cball    = {0, 0, 0.0f, 0.0f, (BallColor)0};
 	g->ballMoving = false;
 	g->aiming     = false;
 	g->aimx = 0;  g->aimy = 0;
@@ -93,6 +96,7 @@ void initBallList(Node* head, int count)
 	ball b;
 	for (int i = 0; i < count; ++i) {
 		b.c = (BallColor)(i % COLOR_COUNT);
+			b.animTimer = 0.0f;
 		ListInsert(head, 0, b);
 	}
 }
@@ -111,6 +115,7 @@ void updateBallPos(const GameContext* g, Node* head)
 		double r = g->R_OUTER - k * theta;
 		p->data.x = (float)(g->centerX + r * cos(theta));
 		p->data.y = (float)(g->centerY + r * sin(theta));
+		p->data.theta = (float)theta;
 
 		double arc = 0.0;
 		while (arc < step) {
@@ -285,16 +290,12 @@ static void startGame(GameContext* g)
 
 static void finishGame(GameContext* g, bool won)
 {
-	int remBalls = 0;
-	Node* np = g->head->next;
-	while (np != NULL) { remBalls++; np = np->next; }
-	if (!won) {
-		g->totalScore -= remBalls * 20;
-		if (g->totalScore < 0) g->totalScore = 0;
-	}
 	g->gameWon = won;
 	g->state = CLEARING;
 	g->clearTimer = 0.0f;
+	g->clearPhase = 0;
+	g->clearBallProgress = 0.0f;
+	g->clearActiveTheta  = 0.0f;
 }
 
 static void resetBall(GameContext* g)
@@ -534,6 +535,133 @@ void UpdatePlaying(GameContext* g)
 
 	if (g->remainingShots == 0 && g->head->next != NULL)
 		finishGame(g, false);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Game update (CLEARING only)
+// ═══════════════════════════════════════════════════════
+
+// ── 缓动函数：加速(25%) → 匀速(50%) → 减速(25%) ──
+static float easeBallProgress(float t)
+{
+	if (t < 0.25f) {
+		float u = t / 0.25f;
+		return 0.164f * u * u;
+	} else if (t < 0.75f) {
+		return 0.164f + 1.312f * (t - 0.25f);
+	} else {
+		float u = 1.0f - t;
+		return 1.0f - 0.131f * u - 2.362f * u * u;
+	}
+}
+
+// ── 球到中心的螺旋弧长近似 ──
+static float spiralDistToCenter(const GameContext* g, const ball* b)
+{
+	const double k = (g->R_OUTER - g->R_INNER) / TOTAL_THETA;
+	double thetaMax = g->R_OUTER / k;
+	double dTheta = thetaMax - (double)b->theta;
+	if (dTheta < 0.0) dTheta = 0.0;
+	double r = g->R_OUTER - k * (double)b->theta;
+	if (r < 0.0) r = 0.0;
+	return (float)((r * 0.55 + (double)BALLRADIUS * 3.0) * dTheta);
+}
+
+void UpdateClearing(GameContext* g)
+{
+	float dt = GetFrameTime();
+	g->clearTimer += dt;
+
+	// ── Phase 0: 球链沿螺旋线依次收缩消除 ──
+	if (g->clearPhase == 0) {
+		// 无剩余球或已通关 → 跳过 Phase 0
+		if (g->head->next == NULL || g->gameWon) {
+			g->clearPhase = 1;
+			g->clearTimer = 0.0f;
+			return;
+		}
+		// 从尾部（最内层）向前推进动画
+		// 找到最内层球（链表尾部）
+		// 从尾部（最内层）向前推进动画
+		Node* tail = g->head;
+		while (tail->next != NULL) tail = tail->next;
+
+		// 尾部球动画
+		float totalT = spiralDistToCenter(g, &tail->data)
+		    / (1.5f * (float)BALLRADIUS * 60.0f);
+		if (totalT < 0.15f) totalT = 0.15f;
+	// 确保动画计时器从0开始（首次进入Phase 0）
+
+		tail->data.animTimer += dt;
+		float tTail = tail->data.animTimer / totalT;
+		if (tTail > 1.0f) tTail = 1.0f;
+
+		// 尾部球到达中央 → 移除并扣分
+		if (tTail >= 1.0f) {
+			if (tail->prev != NULL)
+				tail->prev->next = NULL;
+			g->totalScore -= 20;
+			if (g->totalScore < 0) g->totalScore = 0;
+			if (g->popupCount < MAX_POPUPS) {
+				ScorePopup sp;
+				sp.x = (float)g->centerX;
+				sp.y = (float)g->centerY;
+				sp.score = -20;
+				sp.life = 30;
+				g->popups[g->popupCount++] = sp;
+			}
+			free(tail);
+		}
+
+		// 重新找尾部并向前激活外层球
+		if (g->head->next != NULL) {
+			Node* t = g->head;
+			while (t->next != NULL) t = t->next;
+			float tt = spiralDistToCenter(g, &t->data)
+			    / (1.5f * (float)BALLRADIUS * 60.0f);
+			if (tt < 0.15f) tt = 0.15f;
+			float tn = t->data.animTimer / tt;
+			if (tn > 1.0f) tn = 1.0f;
+			bool activate = (tn >= 0.25f);
+
+			Node* b = t->prev;
+			while (b != g->head && activate) {
+				float bt = spiralDistToCenter(g, &b->data)
+				    / (1.5f * (float)BALLRADIUS * 60.0f);
+				if (bt < 0.15f) bt = 0.15f;
+				b->data.animTimer += dt;
+				float bn = b->data.animTimer / bt;
+				if (bn > 1.0f) bn = 1.0f;
+				activate = (bn >= 0.25f);
+				b = b->prev;
+			}
+		}
+
+		// 全部移除 → Phase 1
+		if (g->head->next == NULL) {
+			g->clearPhase = 1;
+			g->clearTimer = 0.0f;
+		}
+return;
+
+	}
+
+	// ── Phase 1: 百叶窗淡出 ──
+	if (g->clearPhase == 1) {
+		if (g->clearTimer > 0.8f) {
+			g->clearPhase = 2;
+			g->clearTimer = 0.0f;
+		}
+		return;
+	}
+
+	// ── Phase 2: 得分飞入中央 → SETTLEMENT ──
+	if (g->clearPhase == 2) {
+		if (g->clearTimer > 1.0f) {
+			g->state = SETTLEMENT;
+		}
+		return;
+	}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -790,51 +918,37 @@ void RenderPlaying(GameContext* g)
 
 void RenderClearing(GameContext* g)
 {
-	float dt = GetFrameTime();
-	g->clearTimer += dt;
-	float t = g->clearTimer;
-
-	if (t < 1.0f) {
+	// ── Phase 0: 球链沿螺旋线依次收缩消除 ──
+	if (g->clearPhase == 0) {
 		drawSpiralGuide(g);
+
+		// 遍历所有球，各自按缓动进度沿螺旋线绘制
+		const double k = (g->R_OUTER - g->R_INNER) / TOTAL_THETA;
+		double thetaMax = g->R_OUTER / k;
+		Node* p = g->head->next;
+		while (p != NULL) {
+			float totalT = spiralDistToCenter(g, &p->data)
+			    / (1.5f * (float)BALLRADIUS * 60.0f);
+			if (totalT < 0.15f) totalT = 0.15f;
+			float t = p->data.animTimer / totalT;
+			if (t > 1.0f) t = 1.0f;
+			float progress = easeBallProgress(t);
+
+			double theta = (double)p->data.theta
+			    + (thetaMax - (double)p->data.theta) * (double)progress;
+			double r = g->R_OUTER - k * theta;
+			if (r < 0.0) r = 0.0;
+			float sx = (float)(g->centerX + r * cos(theta));
+			float sy = (float)(g->centerY + r * sin(theta));
+			DrawFilledCircle(sx, sy, (float)BALLRADIUS,
+			                 ballColorTable[(int)p->data.c]);
+			p = p->next;
+		}
+
+		// 绘制中央球
 		drawColBall(&g->cball, (float)g->centerX, (float)g->centerY);
 
-		int startGap = g->winHeight / 37;
-		if (startGap < 2) startGap = 2;
-		int lineGap = startGap - (int)(t * (startGap - 1));
-		if (lineGap < 1) lineGap = 1;
-		for (int y = 0; y < g->winHeight; y += lineGap)
-			DrawWideLine(0.0f, (float)y,
-			             (float)g->winWidth, (float)y, BLACK);
-
-	} else if (t < 2.0f) {
-		float s = (t - 1.0f);
-		if (s > 1.0f) s = 1.0f;
-
-		int cornerFontH = BALLRADIUS * 3;
-		if (cornerFontH < 14) cornerFontH = 14;
-		int centerFontH = g->winHeight / 6;
-		if (centerFontH < 24) centerFontH = 24;
-		int curFontH = cornerFontH + (int)((centerFontH - cornerFontH) * s);
-
-		char scoreStr[32];
-		sprintf(scoreStr, "Score: %d", g->totalScore);
-		int tw = MeasureTextStr(scoreStr, curFontH);
-
-		int startX = g->winWidth - tw - 10;
-		int startY = 10;
-		int endX = g->centerX - tw / 2;
-		int endY = g->centerY - curFontH / 2;
-
-		int curX = startX + (int)((endX - startX) * s);
-		int curY = startY + (int)((endY - startY) * s);
-		DrawTextStr(scoreStr, (float)curX, (float)curY,
-		            curFontH, (Color){255, 255, 200, 255});
-	} else {
-		g->state = SETTLEMENT;
-	}
-
-	// Popups + corner score during phase A
-	if (t < 1.0f) {
+		// popup 更新 + 绘制
 		for (int i = 0; i < g->popupCount; ) {
 			g->popups[i].y -= BALLRADIUS * 0.06f;
 			g->popups[i].life--;
@@ -848,16 +962,22 @@ void RenderClearing(GameContext* g)
 		for (int i = 0; i < g->popupCount; i++) {
 			int brightness = g->popups[i].life * 255 / 30;
 			char buf[16];
-			sprintf(buf, "+%d", g->popups[i].score);
+			if (g->popups[i].score >= 0)
+				sprintf(buf, "+%d", g->popups[i].score);
+			else
+				sprintf(buf, "%d", g->popups[i].score);
 			int tw = MeasureTextStr(buf, popupFontH);
+			Color pc = (g->popups[i].score >= 0)
+			    ? (Color){(unsigned char)brightness,
+			             (unsigned char)brightness, 0, 255}
+			    : (Color){(unsigned char)brightness, 0, 0, 255};
 			DrawTextStr(buf,
 			            g->popups[i].x - (float)tw / 2,
 			            g->popups[i].y,
-			            popupFontH,
-			            (Color){(unsigned char)brightness,
-			                    (unsigned char)brightness, 0, 255});
+			            popupFontH, pc);
 		}
 
+		// 右上角 Score
 		int scoreFontH = BALLRADIUS * 3;
 		if (scoreFontH < 14) scoreFontH = 14;
 		char scoreStr[32];
@@ -865,6 +985,67 @@ void RenderClearing(GameContext* g)
 		int sw = MeasureTextStr(scoreStr, scoreFontH);
 		DrawTextStr(scoreStr, (float)(g->winWidth - sw - 10), 10.0f,
 		            scoreFontH, (Color){255, 255, 200, 255});
+		return;
+	}
+
+	// ── Phase 1: 百叶窗淡出 ──
+	if (g->clearPhase == 1) {
+		drawSpiralGuide(g);
+		drawColBall(&g->cball, (float)g->centerX, (float)g->centerY);
+
+		// 右上角 Score
+		int scoreFontH = BALLRADIUS * 3;
+		if (scoreFontH < 14) scoreFontH = 14;
+		char scoreStr[32];
+		sprintf(scoreStr, "Score: %d", g->totalScore);
+		int sw = MeasureTextStr(scoreStr, scoreFontH);
+		DrawTextStr(scoreStr, (float)(g->winWidth - sw - 10), 10.0f,
+		            scoreFontH, (Color){255, 255, 200, 255});
+
+		// 百叶窗：多条水平黑带从上到下依次扩张
+		int numBlinds = 10;
+		float blindH = (float)g->winHeight / (float)numBlinds;
+		float blindProgress = g->clearTimer / 0.8f;
+		if (blindProgress > 1.0f) blindProgress = 1.0f;
+		for (int i = 0; i < numBlinds; i++) {
+			float bandP = (blindProgress * (numBlinds + 1) - i);
+			if (bandP < 0.0f) bandP = 0.0f;
+			if (bandP > 1.0f) bandP = 1.0f;
+			DrawRectangle(0.0f, i * blindH,
+			              (float)g->winWidth, blindH * bandP, BLACK);
+		}
+		return;
+	}
+
+	// ── Phase 2: Score 飞入中央 ──
+	{
+		float t = g->clearTimer;
+		float s = t / 1.0f;
+		if (s > 1.0f) s = 1.0f;
+
+		int cornerFontH = BALLRADIUS * 3;
+		if (cornerFontH < 14) cornerFontH = 14;
+		int centerFontH = g->winHeight / 6;
+		int maxFontH = g->winWidth / 5;
+		if (centerFontH > maxFontH) centerFontH = maxFontH;
+		if (centerFontH < 24) centerFontH = 24;
+		int curFontH = cornerFontH + (int)((centerFontH - cornerFontH) * s);
+
+		char scoreStr[32];
+		sprintf(scoreStr, "Score: %d", g->totalScore);
+		int tw = MeasureTextStr(scoreStr, curFontH);
+
+		int startX = g->winWidth - MeasureTextStr(scoreStr, cornerFontH) - 10;
+		if (startX < 0) startX = 0;
+		int startY = 10;
+		int endX = g->centerX - tw / 2;
+		int endY = g->centerY - curFontH / 2;
+
+		int curX = startX + (int)((endX - startX) * s);
+		int curY = startY + (int)((endY - startY) * s);
+		DrawTextStr(scoreStr, (float)curX, (float)curY,
+		            curFontH, (Color){255, 255, 200, 255});
+		return;
 	}
 }
 
@@ -931,14 +1112,19 @@ void RenderPlayingHUD(GameContext* g)
 	for (int i = 0; i < g->popupCount; i++) {
 		int brightness = g->popups[i].life * 255 / 30;
 		char buf[16];
-		sprintf(buf, "+%d", g->popups[i].score);
+		if (g->popups[i].score >= 0)
+			sprintf(buf, "+%d", g->popups[i].score);
+		else
+			sprintf(buf, "%d", g->popups[i].score);
 		int tw = MeasureTextStr(buf, popupFontH);
+		Color pc = (g->popups[i].score >= 0)
+		    ? (Color){(unsigned char)brightness,
+		             (unsigned char)brightness, 0, 255}
+		    : (Color){(unsigned char)brightness, 0, 0, 255};
 		DrawTextStr(buf,
 		            g->popups[i].x - (float)tw / 2,
 		            g->popups[i].y,
-		            popupFontH,
-		            (Color){(unsigned char)brightness,
-		                    (unsigned char)brightness, 0, 255});
+		            popupFontH, pc);
 	}
 
 	// Score in top-right corner

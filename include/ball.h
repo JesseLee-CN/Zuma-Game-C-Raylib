@@ -20,6 +20,8 @@ struct ball
 {
 	float x;
 	float y;
+	float theta;
+	float animTimer;
 	BallColor c;
 };
 

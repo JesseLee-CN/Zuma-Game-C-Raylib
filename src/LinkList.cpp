@@ -84,7 +84,7 @@ DataType ListDelete(Node *head, unsigned int index)
 
 	q = p->next;
 	if (q == NULL) {
-		DataType empty = {0, 0, (BallColor)0};
+		DataType empty = {0, 0, 0.0f, 0.0f, (BallColor)0};
 		return empty;
 	}
 	p->next = q->next;

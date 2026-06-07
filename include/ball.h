@@ -6,11 +6,21 @@
 
 extern int BALLRADIUS;
 
+enum BallColor {
+	COLOR_BLUE = 0,
+	COLOR_GREEN,
+	COLOR_RED,
+	COLOR_YELLOW,
+	COLOR_MAGENTA,
+	COLOR_BROWN,
+	COLOR_COUNT = 6
+};
+
 struct ball
 {
 	float x;
 	float y;
-	int c;
+	BallColor c;
 };
 
 

@@ -84,7 +84,7 @@ DataType ListDelete(Node *head, unsigned int index)
 
 	q = p->next;
 	if (q == NULL) {
-		DataType empty = {0, 0, 0};
+		DataType empty = {0, 0, (BallColor)0};
 		return empty;
 	}
 	p->next = q->next;
@@ -106,7 +106,7 @@ int EliminateRuns(Node *head)
 	if (curr == NULL) return 0;
 
 	while (curr != NULL && curr->next != NULL) {
-		int color = curr->data.c;
+		BallColor color = curr->data.c;
 		int count = 1;
 		Node *runEnd = curr;
 

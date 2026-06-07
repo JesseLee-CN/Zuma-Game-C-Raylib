@@ -1,10 +1,12 @@
-# Zuma Game
+# Zuma-Game-C-Raylib
 
-基于 C++ 与 raylib 的祖玛消球游戏。
+基于 C++ 与 raylib 的祖玛消球游戏，由 [Zuma-Game-C-EasyX](https://github.com/JesseLee-CN/Zuma-Game-C-EasyX) 重构而来。
 
 ## 项目概述
 
 本项目是数据结构课程项目，实现经典祖玛（Zuma）游戏的核心玩法：沿阿基米德螺旋线排列的彩球链逐渐向中心收缩，玩家瞄准并发射彩球，当 ≥3 个同色球连在一起时消除得分。游戏使用**双向链表**管理球链，支持动态插入与连锁消除。
+
+原项目使用 EasyX 图形库，本重构将其替换为 raylib，同时保持全部游戏逻辑不变。
 
 ## 环境要求
 

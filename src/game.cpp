@@ -346,8 +346,8 @@ void InputMenu(GameContext* g)
 			}
 		}
 		// ── EXIT 按钮 ──
-		int exitBtnW = btnW;
-		int exitBtnH = btnH;
+		int exitBtnW = btnW * 3 / 5;
+		int exitBtnH = btnH * 3 / 4;
 		int exitBtnY = startY + 5 * gap + btnH / 2;
 		int exitBtnX = g->centerX - exitBtnW / 2;
 		if (PointInRect(mx, my, exitBtnX, exitBtnY, exitBtnW, exitBtnH)) {
@@ -602,11 +602,13 @@ void RenderMenu(const GameContext* g)
 	}
 
 	// ── EXIT 按钮 ──
+	int exitBtnW = btnW * 3 / 5;
+	int exitBtnH = btnH * 3 / 4;
 	int exitBtnY = startY + 5 * gap + btnH / 2;
-	int exitBtnX = g->centerX - btnW / 2;
-	bool hoverExit = PointInRect(g->aimx, g->aimy, exitBtnX, exitBtnY, btnW, btnH);
-	int exitFontH = btnH * 55 / 100;
-	drawButton(exitBtnX, exitBtnY, btnW, btnH, "EXIT", exitFontH, hoverExit);
+	int exitBtnX = g->centerX - exitBtnW / 2;
+	bool hoverExit = PointInRect(g->aimx, g->aimy, exitBtnX, exitBtnY, exitBtnW, exitBtnH);
+	int exitFontH = exitBtnH * 55 / 100;
+	drawButton(exitBtnX, exitBtnY, exitBtnW, exitBtnH, "EXIT", exitFontH, hoverExit);
 }
 
 void RenderCustomize(const GameContext* g)

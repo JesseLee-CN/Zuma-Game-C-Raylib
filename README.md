@@ -1,56 +1,40 @@
-# Zuma-Game-C-Raylib
+# Zuma Game
 
-基于 C++ 与 Raylib (OpenGL GPU 加速) 的祖玛游戏实现
+基于 C++ 与 raylib 的祖玛消球游戏。
 
 ## 项目概述
 
-本项目是 [Zuma-Game-C-EasyX](https://github.com/JesseLee-CN/Zuma-Game-C-EasyX) 的 GPU 渲染重构版本。将原有的 EasyX (GDI/CPU 渲染) 后端替换为 **Raylib (OpenGL 3.3+ / GPU 渲染)**，同时保持全部游戏逻辑不变。
-
-### 重构目标
-- GPU 加速 2D 渲染（硬件光栅化、纹理文字、自动批处理）
-- 稳定的 60 FPS（原 GDI 版本在球数较多时掉帧）
-- 渲染抽象层分离，后端可替换（详见 [PLAN.md](PLAN.md)）
-
-## 核心架构
-
-```
-main.cpp (游戏逻辑)
-    └── render.h (渲染抽象层)
-        └── render.cpp (Raylib OpenGL 后端)
-            └── raylib 5.x (GPU)
-```
-
-游戏逻辑层（状态机、碰撞检测、阿基米德螺旋计算、双向链表消除算法）**完全独立于渲染后端**。
+本项目是数据结构课程项目，实现经典祖玛（Zuma）游戏的核心玩法：沿阿基米德螺旋线排列的彩球链逐渐向中心收缩，玩家瞄准并发射彩球，当 ≥3 个同色球连在一起时消除得分。游戏使用**双向链表**管理球链，支持动态插入与连锁消除。
 
 ## 环境要求
 
 - Windows 系统（MinGW-w64 g++）
-- [Raylib 5.5+](https://github.com/raysan5/raylib/releases)
+- [raylib 6.0+](https://github.com/raysan5/raylib/releases)
 
-### 安装 Raylib
+### 安装 raylib
 
-1. 下载 `raylib-5.5_win64_mingw-w64.zip`
-2. 解压到 `C:\raylib\`（或自定义路径）
-3. 设置环境变量：`RAYLIB_PATH=C:\raylib`
+1. 下载 `raylib-6.0_win64_mingw-w64.zip`
+2. 解压到目标目录（如 `D:\EnviroConfig\raylib\raylib-6.0_win64_mingw-w64`）
+3. 构建时指定 `RAYLIB_PATH` 指向该目录
 
-验证安装：
-```bash
-ls $RAYLIB_PATH/include/raylib.h
-ls $RAYLIB_PATH/lib/libraylib.a
-```
-
-## 构建
+## 构建与运行
 
 ### VS Code（推荐）
+
 在 VS Code 中打开项目，按 `Ctrl+Shift+B` 构建。
 
 ### 命令行
-```bash
-# 使用 Makefile
-make build
 
-# 或手动编译
-g++ -g -Wall -Wextra -std=c++17 -mwindows \
+```bash
+make build RAYLIB_PATH="/path/to/raylib"
+make run   RAYLIB_PATH="/path/to/raylib"
+make clean
+```
+
+### 手动编译
+
+```bash
+g++ -g -Wall -Wextra -std=c++17 \
     -Iinclude -I${RAYLIB_PATH}/include \
     -L${RAYLIB_PATH}/lib \
     src/main.cpp src/LinkList.cpp src/render.cpp \
@@ -58,46 +42,63 @@ g++ -g -Wall -Wextra -std=c++17 -mwindows \
     -lraylib -lopengl32 -lgdi32 -lwinmm
 ```
 
-**链接顺序重要：** `-lraylib` 必须在 `-lopengl32 -lgdi32 -lwinmm` 之前。
-
-### 运行
-```bash
-make run
-# 或
-./build/ZumaGame.exe
-```
+**链接顺序**：`-lraylib` 必须在 `-lopengl32 -lgdi32 -lwinmm` 之前。
 
 ## 项目结构
 
 ```
 Zuma-Game-C-Raylib/
-├── PLAN.md              # 完整重构方案文档
-├── Makefile             # 构建脚本
+├── Makefile
+├── README.md
 ├── .gitignore
 ├── .vscode/
-│   └── tasks.json       # VS Code 构建任务
+│   └── tasks.json         # VS Code 构建任务
 ├── docs/
-│   └── rules.md         # 计分规则
+│   └── rules.md           # 计分规则
 ├── include/
-│   ├── ball.h           # 球结构体（无图形依赖）
-│   ├── LinkList.h       # 双向链表接口
-│   └── render.h         # 渲染抽象层接口 [新]
+│   ├── ball.h             # 球结构体
+│   ├── LinkList.h         # 双向链表接口
+│   └── render.h           # 渲染抽象层接口
 ├── src/
-│   ├── main.cpp         # 游戏主逻辑（使用 render.h）
-│   ├── LinkList.cpp     # 链表实现（不变）
-│   └── render.cpp       # Raylib 渲染后端 [新]
-└── build/               # 构建输出目录
+│   ├── main.cpp           # 游戏主逻辑（状态机、碰撞检测、螺旋布局）
+│   ├── LinkList.cpp       # 链表实现 + 消除算法 + 计分
+│   └── render.cpp         # raylib 渲染后端
+└── build/                 # 构建输出（被 .gitignore 忽略）
 ```
 
-## 游戏说明
+## 架构
 
-见原项目 README。操作方式、难度系统、计分规则保持不变。
+```
+main.cpp (游戏逻辑)
+    └── render.h (渲染抽象层)
+        └── render.cpp (raylib 后端)
+```
 
-### 操作
+游戏逻辑层（状态机、碰撞检测、螺旋计算、链表消除算法）独立于渲染后端，通过 `render.h` 抽象接口与图形层通信。
 
-| 操作 | 功能 |
-|------|------|
-| 鼠标移动 | 瞄准 / 菜单悬停 |
+## 操作
+
+| 操作     | 功能                       |
+| -------- | -------------------------- |
+| 鼠标移动 | 瞄准 / 菜单悬停            |
 | 鼠标左键 | 菜单选择 / 按住瞄准松开发射 |
-| 鼠标右键 | 任意界面退出 |
-| 窗口缩放 | 自由拖动边框 |
+| 鼠标右键 | 任意界面退出               |
+| 窗口缩放 | 自由拖动边框               |
+
+## 难度
+
+| 模式       | 初始球数 | 射击次数 |
+| ---------- | -------- | -------- |
+| INFINITE   | 10       | 无限     |
+| EASY       | 10       | 100      |
+| COMMON     | 20       | 80       |
+| HARD       | 30       | 50       |
+| CUSTOMIZED | 自定义   | 自定义   |
+
+## 计分
+
+详见 `docs/rules.md`。核心公式：
+
+- 基础分 = N² × 10（N ≥ 3 个连续同色球）
+- 连锁系数 = 1 + (k − 1) × 0.5
+- 一次性消除比多次连锁总分更高
